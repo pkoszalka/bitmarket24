@@ -1,0 +1,4 @@
+include bitmarket24/__init__.py
+include bitmarket24/client.py
+include README.md
+include LICENSE
