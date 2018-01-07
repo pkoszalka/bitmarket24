@@ -1,13 +1,37 @@
 from datetime import datetime
+from urllib import parse
 
 import jwt
 import requests
 
 
-LTC_PLN_MARKET_ID = 'LTC_PLN'
+class MarketID:
+    BCC_PLN = 'bcc_pln'
+    BTC_PLN = 'btc_pln'
+    BTG_PLN = 'btg_pln'
+    LTC_BTC = 'ltc_btc'
+    LTC_PLN = 'ltc_pln'
 
 
-class Bitmarket24ApiClient:
+class OfferType:
+    ASK = 'ask'
+    BID = 'bid'
+
+
+class OrderStatus:
+    NEW = 'new'
+    ACTIVE = 'active'
+    COMPLETED = 'completed'
+    CANCELLED = 'cancelled'
+
+
+class BM24PLClientException(Exception):
+    pass
+
+
+class BM24PLClient:
+    SELECTED_MARKET = None
+
     _base_url = 'https://bitmarket24.pl/api/v1'
     _market_status_url = 'https://bitmarket24.pl/api/{}/status.json'
 
@@ -16,10 +40,13 @@ class Bitmarket24ApiClient:
 
     # CLIENT
     _endpoint_client_balance = '/user/me/balance'
-
-    # ORDERS
+    _endpoint_client_orderbook = '/orderbook'
+    _endpoint_client_orders = '/orders'
+    _endpoint_client_trades = '/trades'
+    _endpoint_client_turnover = '/user/me/turnover'
+    _endpoint_client_fee = '/user/me/fee'
     _endpoint_order = '/order'
-    _endpoint_delete_order = '/orderbook/{}'
+    _endpoint_order_trades = '/order/{}/trades'
 
     def __init__(self, client_id, client_key):
         self._client_id = client_id
@@ -60,30 +87,115 @@ class Bitmarket24ApiClient:
         )
 
     @classmethod
-    def get_market_status(cls, market_id):
-        return requests.get(cls._market_status_url.format(market_id))
+    def get_market_id(cls, market_id):
+
+        if market_id is None:
+            market_id = cls.SELECTED_MARKET
+
+        if market_id is None:
+            raise BM24PLClientException('Provide market ID or override `SELECTED_MARKET` attribute')
+
+        return market_id
+
+    @classmethod
+    def get_qs_params_from_dict(cls, qs_dict):
+        for key in list(qs_dict.keys()):
+            if qs_dict[key] is None:
+                del qs_dict[key]
+
+        return parse.urlencode(qs_dict)
+
+    @classmethod
+    def get_market_status(cls, market_id=None):
+        market_id = cls.get_market_id(market_id)
+        return requests.get(cls._market_status_url.format(market_id.upper())).json()
+
+    def get_order_book(self, market_id=None):
+        market_id = self.get_market_id(market_id)
+
+        return self.make_get_request(
+            self._endpoint_order_book.format(market_id)).json()
 
     def get_client_balance(self):
         return self.make_get_request(
             self._endpoint_client_balance,
             headers=self.auth_headers
-        )
+        ).json()
 
-    def get_order_book(self, market_id):
+    def get_client_orders(
+        self, market_id=None, order_type=None, status=None, limit=None, offset=None, dir=None
+    ):
+        market_id = self.get_market_id(market_id)
+        qs_dict = dict(
+            market=market_id,
+            type=order_type,
+            limit=limit,
+            offset=offset,
+            dir=dir
+        )
+        if status is not None:
+            qs_dict['status[]'] = status
+
+        qs_params = self.get_qs_params_from_dict(qs_dict)
+
         return self.make_get_request(
-            self._endpoint_order_book.format(market_id)).json()
+            "{}?{}".format(self._endpoint_client_orders, qs_params),
+            headers=self.auth_headers
+        ).json()
+
+    def get_client_trades(self, order_type, market_id=None, limit=None, offset=None):
+        market_id = self.get_market_id(market_id)
+        qs_dict = dict(
+            market=market_id,
+            type=order_type,
+            limit=limit,
+            offset=offset,
+        )
+        qs_params = self.get_qs_params_from_dict(qs_dict)
+        return self.make_get_request(
+            "{}?{}".format(self._endpoint_client_trades, qs_params),
+            headers=self.auth_headers
+        ).json()
+
+    def get_client_turnover(self):
+        return self.make_get_request(
+            self._endpoint_client_turnover,
+            headers=self.auth_headers
+        ).json()
+
+    def get_client_fee(self):
+        return self.make_get_request(
+            self._endpoint_client_fee,
+            headers=self.auth_headers
+        ).json()
 
     def get_order_info(self, order_id):
         endpoint = '{}/{}'.format(self._endpoint_order, order_id)
-        return self.make_get_request(endpoint, headers=self.auth_headers)
+        return self.make_get_request(endpoint, headers=self.auth_headers).json()
 
-    def delete_order(self, order_id):
-        return requests.delete(self._endpoint_delete_order.format(order_id))
+    def get_order_trades(self, order_id):
+        endpoint = self._endpoint_order_trades.format(order_id)
+        return self.make_get_request(endpoint, headers=self.auth_headers).json()
 
-    def make_ltc_bid(self, amount, rate):
+    def cancel_client_order(self, order_id):
+        return self.make_delete_request(
+            "{}/{}".format(self._endpoint_client_orderbook, order_id)).status_code == 202
+
+    def delete_client_orders(self, market_id=None, order_type=None):
+        qs_dict = dict(
+            market=market_id,
+            type=order_type
+        )
+        qs_params = self.get_qs_params_from_dict(qs_dict)
+        return self.make_delete_request(
+            "{}?{}".format(self._endpoint_client_orderbook, qs_params))
+
+    def make_bid(self, amount, rate, market_id=None):
+        market_id = self.get_market_id(market_id)
+
         data = {
-            "type": "bid",
-            "market": "ltc_pln",
+            "type": OfferType.BID,
+            "market": market_id,
             "amount": amount,
             "rate": rate
         }
@@ -93,10 +205,12 @@ class Bitmarket24ApiClient:
             headers=self.auth_headers
         )
 
-    def make_ltc_ask(self, amount, rate):
+    def make_ask(self, amount, rate, market_id):
+        market_id = self.get_market_id(market_id)
+
         data = {
-            "type": "ask",
-            "market": "ltc_pln",
+            "type": OfferType.ASK,
+            "market": market_id,
             "amount": amount,
             "rate": rate
         }

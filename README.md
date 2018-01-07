@@ -1,18 +1,28 @@
-Client for Bitmarket24.pl API
------------------------------
-
-- login with API key
-- get market status
-- get orders book
-- get order info
-- make LTC ASK/BID
+# Client for Bitmarket24.pl API
 
 
+Features
+--------
+
+Public
+- list of all active offers
+- market status
+
+Orders
+- cancel selected order
+- cancel all orders
+- order details
+- list of client orders
+- list of order transactions
+- making orders
+
+Trades
+- client trade list
 
 
-Requirements:
-- python-requests
-- jwt
+Client
+- balance
+- turnover
+- fee
 
 
-Work in progress
