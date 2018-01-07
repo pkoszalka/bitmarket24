@@ -133,13 +133,14 @@ class BM24PLClient:
             offset=offset,
             dir=dir
         )
-        if status is not None:
-            qs_dict['status[]'] = status
+        qs_string = self.get_qs_params_from_dict(qs_dict)
 
-        qs_params = self.get_qs_params_from_dict(qs_dict)
+        if status is not None:
+            qs_string = "{}&{}".format(
+                qs_string, "&".join(["status[]={}".format(item) for item in status]))
 
         return self.make_get_request(
-            "{}?{}".format(self._endpoint_client_orders, qs_params),
+            "{}?{}".format(self._endpoint_client_orders, qs_string),
             headers=self.auth_headers
         ).json()
 
@@ -181,7 +182,7 @@ class BM24PLClient:
         return self.make_delete_request(
             "{}/{}".format(self._endpoint_client_orderbook, order_id)).status_code == 202
 
-    def delete_client_orders(self, market_id=None, order_type=None):
+    def cancel_client_orders(self, market_id=None, order_type=None):
         qs_dict = dict(
             market=market_id,
             type=order_type
