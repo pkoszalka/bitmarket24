@@ -26,3 +26,7 @@ Client
 - fee
 
 
+Installation
+------------
+
+Install library bitmarket24 from PYPI using your favourite package manager (ex. pip install bitmarket24)
