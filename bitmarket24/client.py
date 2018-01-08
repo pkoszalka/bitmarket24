@@ -93,7 +93,7 @@ class BM24PLClient:
             market_id = cls.SELECTED_MARKET
 
         if market_id is None:
-            raise BM24PLClientException('Provide market ID or override `SELECTED_MARKET` attribute')
+            raise BM24PLClientException('Provide `market_id` or override `SELECTED_MARKET` attribute')
 
         return market_id
 
@@ -206,7 +206,7 @@ class BM24PLClient:
             headers=self.auth_headers
         )
 
-    def make_ask(self, amount, rate, market_id):
+    def make_ask(self, amount, rate, market_id=None):
         market_id = self.get_market_id(market_id)
 
         data = {
